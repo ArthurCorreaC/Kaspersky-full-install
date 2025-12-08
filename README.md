@@ -26,7 +26,7 @@ MANAGEMENT_SERVER=ksc3cta02.3cta.eb.mil.br                                      
 NTP_SERVER=ntp.3cta.eb.mil.br                                                          # Servidor NTP
 LOG_DIRECTORY=log                                                                      # Pasta para armazenar logs
 PATCH_MODE=skip                                                                        # skip (padrão), prompt, ou auto
-PAUSE_ON_EXIT=false                                                                    # true para pausar no final
+PAUSE_ON_EXIT=false                                                                    # true/1/yes para pausar; padrão totalmente automático
 ```
 
 ---

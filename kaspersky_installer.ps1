@@ -34,7 +34,13 @@ $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERV
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
 $PatchMode        = if ($Config['PATCH_MODE']) { $Config['PATCH_MODE'] } else { 'skip' }
-$PauseOnExit      = if ($Config['PAUSE_ON_EXIT']) { $Config['PAUSE_ON_EXIT'] } else { 'false' }
+$PauseOnExit      = switch ($Config['PAUSE_ON_EXIT']?.ToString().ToLowerInvariant()) {
+    'true' { $true }
+    '1'    { $true }
+    'yes'  { $true }
+    'y'    { $true }
+    default { $false }
+}
 
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
@@ -303,7 +309,7 @@ try {
     Write-Progress -Activity "Instalação Personalizada Kaspersky" -Completed -ErrorAction SilentlyContinue
     Write-Host
     Stop-Transcript | Out-Null
-    if ($PauseOnExit.ToString().ToLowerInvariant() -eq 'true') {
+    if ($PauseOnExit -eq $true) {
         Read-Host -Prompt "Pressione ENTER para fechar esta janela..."
     }
 }
