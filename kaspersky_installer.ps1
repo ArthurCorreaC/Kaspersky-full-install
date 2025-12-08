@@ -33,6 +33,8 @@ $InstallerUrl    = if ($Config['INSTALLER_URL']) { $Config['INSTALLER_URL'] } el
 $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERVER'] } else { 'ksc3cta02.3cta.eb.mil.br' }
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
+$PatchMode        = if ($Config['PATCH_MODE']) { $Config['PATCH_MODE'] } else { 'skip' }
+$PauseOnExit      = if ($Config['PAUSE_ON_EXIT']) { $Config['PAUSE_ON_EXIT'] } else { 'false' }
 
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
@@ -223,30 +225,46 @@ function Configure-NetworkAgent {
 
 function Apply-OptionalPatches {
     Write-Status -Type Step -Message "ETAPA 4: Patch de Correção (Opcional)"
-    
-    $title = "Patch de Correção"
-    $message = "Deseja executar o patch de correção para problemas de sincronização?"
-    $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Sim", "Aplica os patches de correção."
-    $no = New-Object System.Management.Automation.Host.ChoiceDescription "&Não", "Ignora a aplicação dos patches."
-    $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-    $result = $host.UI.PromptForChoice($title, $message, $options, 1)
 
-    if ($result -eq 0) {
-        if (-NOT (Test-Path -Path $CleanerPath)) {
-            Write-Status -Type Error -Message "Arquivo '$CleanerPath' não encontrado. Etapa ignorada."
-            return
+    $normalizedPatchMode = $PatchMode.ToString().ToLowerInvariant()
+
+    switch ($normalizedPatchMode) {
+        'auto' {
+            $applyPatch = $true
+            Write-Status -Type Info -Message "PATCH_MODE=auto definido. Aplicando correções automaticamente."
         }
-        try {
-            Write-Status -Type Info -Message "Aplicando patches de correção..."
-            & $CleanerPath /uc {B9518725-0876-4793-A409-C6794442FB50} | Out-Null
-            & $CleanerPath /pc {BCF4CF24-88AB-45E1-A6E6-40C8278A70C5} | Out-Null
-            & $CleanerPath /pc {0F05E4E5-5A89-482C-9A62-47CC58643788} | Out-Null
-            Write-Status -Type Success -Message "Patches de correção foram aplicados."
-        } catch {
-            Write-Status -Type Error -Message "Ocorreu um erro ao executar o cleaner."
+        'prompt' {
+            $title = "Patch de Correção"
+            $message = "Deseja executar o patch de correção para problemas de sincronização?"
+            $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Sim", "Aplica os patches de correção."
+            $no = New-Object System.Management.Automation.Host.ChoiceDescription "&Não", "Ignora a aplicação dos patches."
+            $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+            $choice = $host.UI.PromptForChoice($title, $message, $options, 1)
+            $applyPatch = ($choice -eq 0)
         }
-    } else {
-        Write-Status -Type Info -Message "Aplicação de patch de correção ignorada pelo usuário."
+        default {
+            $applyPatch = $false
+            Write-Status -Type Info -Message "Patches opcionais ignorados automaticamente (PATCH_MODE=skip)."
+        }
+    }
+
+    if (-not $applyPatch) {
+        return
+    }
+
+    if (-NOT (Test-Path -Path $CleanerPath)) {
+        Write-Status -Type Error -Message "Arquivo '$CleanerPath' não encontrado. Etapa ignorada."
+        return
+    }
+
+    try {
+        Write-Status -Type Info -Message "Aplicando patches de correção..."
+        & $CleanerPath /uc {B9518725-0876-4793-A409-C6794442FB50} | Out-Null
+        & $CleanerPath /pc {BCF4CF24-88AB-45E1-A6E6-40C8278A70C5} | Out-Null
+        & $CleanerPath /pc {0F05E4E5-5A89-482C-9A62-47CC58643788} | Out-Null
+        Write-Status -Type Success -Message "Patches de correção foram aplicados."
+    } catch {
+        Write-Status -Type Error -Message "Ocorreu um erro ao executar o cleaner."
     }
 }
 
@@ -285,5 +303,7 @@ try {
     Write-Progress -Activity "Instalação Personalizada Kaspersky" -Completed -ErrorAction SilentlyContinue
     Write-Host
     Stop-Transcript | Out-Null
-    Read-Host -Prompt "Pressione ENTER para fechar esta janela..."
+    if ($PauseOnExit.ToString().ToLowerInvariant() -eq 'true') {
+        Read-Host -Prompt "Pressione ENTER para fechar esta janela..."
+    }
 }

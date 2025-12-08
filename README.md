@@ -25,6 +25,8 @@ INSTALLER_URL=https://dados.3cta.eb.mil.br/s/cyJnnqEMn8pa3NP/download?path=%2FWi
 MANAGEMENT_SERVER=ksc3cta02.3cta.eb.mil.br                                             # Servidor Kaspersky Security Center
 NTP_SERVER=ntp.3cta.eb.mil.br                                                          # Servidor NTP
 LOG_DIRECTORY=log                                                                      # Pasta para armazenar logs
+PATCH_MODE=skip                                                                        # skip (padrão), prompt, ou auto
+PAUSE_ON_EXIT=false                                                                    # true para pausar no final
 ```
 
 ---
@@ -38,6 +40,8 @@ LOG_DIRECTORY=log                                                               
    - Executa o **cleaner** (quando necessário) e a instalação do Kaspersky.
    - Configura servidor de gerenciamento e NTP.
    - Registra todas as ações em `log/` (log resumido e transcript completo).
+
+> Para evitar pausas inesperadas, os patches opcionais são ignorados por padrão (`PATCH_MODE=skip`).
 
 ---
 
