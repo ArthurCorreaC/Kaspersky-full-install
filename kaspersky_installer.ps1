@@ -38,8 +38,10 @@ if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
 }
 
-$LogFile = Join-Path $LogDirectory ("install_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
-Start-Transcript -Path $LogFile -Append | Out-Null
+$timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+$LogFile = Join-Path $LogDirectory ("install_{0}.log" -f $timestamp)
+$TranscriptFile = Join-Path $LogDirectory ("install_transcript_{0}.log" -f $timestamp)
+Start-Transcript -Path $TranscriptFile -Append | Out-Null
 
 $KlmoverPath = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\WOW6432Node\KasperskyLab\Components\27\1103\1.0.0.0\Installer" -Name "KLMOVE_EXE" -ErrorAction SilentlyContinue
 if (-not $KlmoverPath) {

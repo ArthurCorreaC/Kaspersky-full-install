@@ -37,7 +37,7 @@ LOG_DIRECTORY=log                                                               
    - Baixa o instalador para `kaspersky/installer.exe` (renomeado automaticamente) caso não exista localmente.
    - Executa o **cleaner** (quando necessário) e a instalação do Kaspersky.
    - Configura servidor de gerenciamento e NTP.
-   - Registra todas as ações em `log/`.
+   - Registra todas as ações em `log/` (log resumido e transcript completo).
 
 ---
 
@@ -64,7 +64,7 @@ instalar_admin.bat  # Executar como Administrador
 
 ## 📝 Logs
 - Gerados automaticamente em `log/` com timestamp no nome do arquivo.
-- Incluem mensagens de status e erros capturados durante a execução.
+- Incluem mensagens de status e erros capturados durante a execução, além de um transcript completo do console.
 
 ---
 
