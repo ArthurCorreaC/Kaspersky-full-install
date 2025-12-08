@@ -1,0 +1,1 @@
+Adicione o instalador do Kaspersky nesta pasta com o nome "installer.exe"
