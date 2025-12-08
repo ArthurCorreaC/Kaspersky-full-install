@@ -34,7 +34,7 @@ LOG_DIRECTORY=log                                                               
 2. O `.bat` chama `kaspersky_installer.ps1`, que:
    - Garante permissão administrativa e codificação UTF-8.
    - Carrega as variáveis do `.env`.
-   - Baixa o instalador para `kaspersky/installer.exe` (renomeado automaticamente) caso não exista localmente.
+   - Baixa o instalador para `kaspersky/installer.exe` (renomeado automaticamente) caso não exista localmente, priorizando **BITS** para uma transferência mais rápida e retomável (cai para `Invoke-WebRequest` se indisponível).
    - Executa o **cleaner** (quando necessário) e a instalação do Kaspersky.
    - Configura servidor de gerenciamento e NTP.
    - Registra todas as ações em `log/` (log resumido e transcript completo).

@@ -147,7 +147,15 @@ function Test-Prerequisites {
 
         Write-Status -Type Info -Message "Instalador não encontrado. Iniciando download..."
         try {
-            Invoke-WebRequest -Uri $InstallerUrl -OutFile $tempDownloadPath -UseBasicParsing
+            $originalProgressPreference = $global:ProgressPreference
+            $global:ProgressPreference = 'SilentlyContinue'
+
+            try {
+                Start-BitsTransfer -Source $InstallerUrl -Destination $tempDownloadPath -ErrorAction Stop
+            } catch {
+                Write-Status -Type Warning -Message "BITS indisponível, tentando download via Invoke-WebRequest..."
+                Invoke-WebRequest -Uri $InstallerUrl -OutFile $tempDownloadPath -UseBasicParsing -ErrorAction Stop
+            }
 
             if (Test-Path -Path $InstallerPath) {
                 Remove-Item -Path $InstallerPath -Force -ErrorAction SilentlyContinue
@@ -164,6 +172,8 @@ function Test-Prerequisites {
             Write-Status -Type Error -Message $downloadError
             Write-Log -Message $downloadError
             throw
+        } finally {
+            $global:ProgressPreference = $originalProgressPreference
         }
     } else {
         Write-Status -Type Success -Message "Arquivo instalador encontrado."
