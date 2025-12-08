@@ -22,7 +22,7 @@ Edite o arquivo `.env` antes de executar. Valores padrão já estão preenchidos
 
 ```
 INSTALLER_URL=https://exemplo.com/installer.exe   # URL do instalador oficial
-MANAGEMENT_SERVER=ksc3cta.3cta.eb.mil.br          # Servidor Kaspersky Security Center
+MANAGEMENT_SERVER=ksc3cta02.3cta.eb.mil.br        # Servidor Kaspersky Security Center
 NTP_SERVER=ntp.3cta.eb.mil.br                     # Servidor NTP
 LOG_DIRECTORY=log                                 # Pasta para armazenar logs
 ```
