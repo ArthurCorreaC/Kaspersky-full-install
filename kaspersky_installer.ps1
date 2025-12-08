@@ -1,18 +1,4 @@
-﻿<#
-#############################################################################
-#                                                                           #
-#   Copyright (c) 4º Batalhão de Infantaria Mecanizado (4ºBIMEC)            #
-#   Seção de Informática                                                    #
-#                                                                           #
-#   Autoria:                                                                #
-#   Ten Valdevino                                                           #
-#   3º Sgt Souto                                                            #
-#   Cb Bruno Silva                                                          #
-#                                                                           #
-#############################################################################
-#>
-
-# --- ETAPA 0: LÓGICA DE EXECUÇÃO E ELEVAÇÃO ---
+﻿# ETAPA 0: LÓGICA DE EXECUÇÃO E ELEVAÇÃO
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
@@ -21,30 +7,57 @@ if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 
 Clear-Host
 
-# Força a página de código do console para UTF-8 para exibir acentos corretamente.
 chcp 65001 | Out-Null
-
-# Força o terminal a interpretar a saída do script como UTF-8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # =================================================================================
-# VARIÁVEIS DE CONFIGURAÇÃO
+# CONFIGURAÇÃO
 # =================================================================================
-$InstallerPath    = Join-Path $PSScriptRoot "kaspersky\installer.exe"
-$CleanerPath      = Join-Path $PSScriptRoot "cleaner\cleaner.exe"
-$CleanerDir       = Join-Path $PSScriptRoot "cleaner\"
+$InstallerPath = Join-Path $PSScriptRoot "kaspersky\installer.exe"
+$CleanerPath   = Join-Path $PSScriptRoot "cleaner\cleaner.exe"
 
-$KlmoverPath      = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\WOW6432Node\KasperskyLab\Components\27\1103\1.0.0.0\Installer" -Name "KLMOVE_EXE" -ErrorAction SilentlyContinue
+$Config = @{}
+$EnvFile = Join-Path $PSScriptRoot ".env"
+if (Test-Path $EnvFile) {
+    Get-Content $EnvFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith('#') -and $line.Contains('=')) {
+            $parts = $line -split '=', 2
+            $Config[$parts[0].Trim()] = $parts[1].Trim()
+        }
+    }
+}
+
+$InstallerUrl    = $Config['INSTALLER_URL']
+$ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERVER'] } else { 'ksc3cta.3cta.eb.mil.br' }
+$NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
+$LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
+
+if (-not (Test-Path $LogDirectory)) {
+    New-Item -ItemType Directory -Path $LogDirectory | Out-Null
+}
+
+$LogFile = Join-Path $LogDirectory ("install_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
+Start-Transcript -Path $LogFile -Append | Out-Null
+
+$KlmoverPath = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\WOW6432Node\KasperskyLab\Components\27\1103\1.0.0.0\Installer" -Name "KLMOVE_EXE" -ErrorAction SilentlyContinue
 if (-not $KlmoverPath) {
     $KlmoverPath = "C:\Program Files (x86)\Kaspersky Lab\NetworkAgent\klmover.exe"
 }
 
-$ManagementServer = "ksc3cta.3cta.eb.mil.br"
-$NtpServer        = "ntp.3cta.eb.mil.br"
-
 # =================================================================================
 # FUNÇÕES AUXILIARES
 # =================================================================================
+
+function Write-Log {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    Add-Content -Path $LogFile -Value "[$timestamp] $Message"
+}
 
 function Write-Status {
     param(
@@ -66,6 +79,7 @@ function Write-Status {
         "Step"    { $statusText = "---"; $color = "Green"; Write-Host "" }
     }
     $formattedMessage = "$($statusText) $Message"
+    Write-Log -Message $formattedMessage
     if ($Type -eq "Warning") {
         Write-Warning $Message
     } elseif ($NoNewLine) {
@@ -75,7 +89,6 @@ function Write-Status {
     }
 }
 
-## [ALTERADO] Removidas as linhas "return $true" e "return $false" para limpar a saída.
 function Invoke-CommandWithStatus {
     param(
         [Parameter(Mandatory=$true)]
@@ -88,9 +101,12 @@ function Invoke-CommandWithStatus {
     try {
         & $Command
         Write-Host " [  OK   ]" -ForegroundColor Green
+        Write-Log -Message "$ActionMessage concluído com sucesso."
     } catch {
         Write-Host " [ FALHA ]" -ForegroundColor Red
-        Write-Status -Type Warning -Message "Ocorreu um erro: $($_.Exception.Message)"
+        $errorMessage = "Ocorreu um erro: $($_.Exception.Message)"
+        Write-Status -Type Warning -Message $errorMessage
+        Write-Log -Message $errorMessage
     }
 }
 
@@ -113,11 +129,30 @@ function Show-Banner {
 
 function Test-Prerequisites {
     Write-Status -Type Step -Message "ETAPA 1: Verificando arquivos e pré-requisitos"
-    
+
     if (-NOT (Test-Path -Path $InstallerPath)) {
-        throw "O arquivo instalador '$InstallerPath' não foi encontrado. A instalação não pode continuar."
+        if (-not $InstallerUrl) {
+            throw "O arquivo instalador '$InstallerPath' não foi encontrado e nenhuma INSTALLER_URL foi definida no .env."
+        }
+
+        $installerDir = Split-Path -Parent $InstallerPath
+        if (-not (Test-Path $installerDir)) {
+            New-Item -ItemType Directory -Path $installerDir | Out-Null
+        }
+
+        Write-Status -Type Info -Message "Instalador não encontrado. Iniciando download..."
+        try {
+            Invoke-WebRequest -Uri $InstallerUrl -OutFile $InstallerPath -UseBasicParsing
+            Write-Status -Type Success -Message "Download do instalador concluído."
+        } catch {
+            $downloadError = "Falha ao baixar o instalador: $($_.Exception.Message)"
+            Write-Status -Type Error -Message $downloadError
+            Write-Log -Message $downloadError
+            throw
+        }
+    } else {
+        Write-Status -Type Success -Message "Arquivo instalador encontrado."
     }
-    Write-Status -Type Success -Message "Arquivo instalador encontrado."
 
     Invoke-CommandWithStatus -ActionMessage "Testando conexão com o servidor '$ManagementServer'..." -Command {
         Resolve-DnsName $ManagementServer -ErrorAction Stop | Out-Null
@@ -220,8 +255,10 @@ try {
     Write-Host
     Write-Status -Type Error -Message "O SCRIPT FOI INTERROMPIDO DEVIDO A UM ERRO:"
     Write-Host ($_.Exception.Message) -ForegroundColor Red
+    Write-Log -Message "Erro fatal: $($_.Exception.Message)"
 } finally {
     Write-Progress -Activity "Instalação Personalizada Kaspersky" -Completed -ErrorAction SilentlyContinue
     Write-Host
+    Stop-Transcript | Out-Null
     Read-Host -Prompt "Pressione ENTER para fechar esta janela..."
 }
