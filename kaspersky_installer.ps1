@@ -15,6 +15,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 # =================================================================================
 $InstallerPath = Join-Path $PSScriptRoot "kaspersky\installer.exe"
 $CleanerPath   = Join-Path $PSScriptRoot "cleaner\cleaner.exe"
+$DefaultInstallerUrl = "https://dados.3cta.eb.mil.br/s/cyJnnqEMn8pa3NP/download?path=%2FWindows&files=installer_win_12_11.exe"
 
 $Config = @{}
 $EnvFile = Join-Path $PSScriptRoot ".env"
@@ -28,7 +29,7 @@ if (Test-Path $EnvFile) {
     }
 }
 
-$InstallerUrl    = $Config['INSTALLER_URL']
+$InstallerUrl    = if ($Config['INSTALLER_URL']) { $Config['INSTALLER_URL'] } else { $DefaultInstallerUrl }
 $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERVER'] } else { 'ksc3cta02.3cta.eb.mil.br' }
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
@@ -140,11 +141,23 @@ function Test-Prerequisites {
             New-Item -ItemType Directory -Path $installerDir | Out-Null
         }
 
+        $tempDownloadPath = Join-Path $installerDir ("installer_tmp_{0}.exe" -f (Get-Random))
+
         Write-Status -Type Info -Message "Instalador não encontrado. Iniciando download..."
         try {
-            Invoke-WebRequest -Uri $InstallerUrl -OutFile $InstallerPath -UseBasicParsing
-            Write-Status -Type Success -Message "Download do instalador concluído."
+            Invoke-WebRequest -Uri $InstallerUrl -OutFile $tempDownloadPath -UseBasicParsing
+
+            if (Test-Path -Path $InstallerPath) {
+                Remove-Item -Path $InstallerPath -Force -ErrorAction SilentlyContinue
+            }
+
+            Move-Item -Path $tempDownloadPath -Destination $InstallerPath -Force
+            Write-Status -Type Success -Message "Download concluído e arquivo salvo como 'installer.exe'."
         } catch {
+            if (Test-Path -Path $tempDownloadPath) {
+                Remove-Item -Path $tempDownloadPath -Force -ErrorAction SilentlyContinue
+            }
+
             $downloadError = "Falha ao baixar o instalador: $($_.Exception.Message)"
             Write-Status -Type Error -Message $downloadError
             Write-Log -Message $downloadError

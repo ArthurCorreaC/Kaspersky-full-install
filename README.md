@@ -21,10 +21,10 @@ Kaspersky-full-install/
 Edite o arquivo `.env` antes de executar. Valores padrão já estão preenchidos.
 
 ```
-INSTALLER_URL=https://exemplo.com/installer.exe   # URL do instalador oficial
-MANAGEMENT_SERVER=ksc3cta02.3cta.eb.mil.br        # Servidor Kaspersky Security Center
-NTP_SERVER=ntp.3cta.eb.mil.br                     # Servidor NTP
-LOG_DIRECTORY=log                                 # Pasta para armazenar logs
+INSTALLER_URL=https://dados.3cta.eb.mil.br/s/cyJnnqEMn8pa3NP/download?path=%2FWindows&files=installer_win_12_11.exe  # URL do instalador oficial
+MANAGEMENT_SERVER=ksc3cta02.3cta.eb.mil.br                                             # Servidor Kaspersky Security Center
+NTP_SERVER=ntp.3cta.eb.mil.br                                                          # Servidor NTP
+LOG_DIRECTORY=log                                                                      # Pasta para armazenar logs
 ```
 
 ---
@@ -34,7 +34,7 @@ LOG_DIRECTORY=log                                 # Pasta para armazenar logs
 2. O `.bat` chama `kaspersky_installer.ps1`, que:
    - Garante permissão administrativa e codificação UTF-8.
    - Carrega as variáveis do `.env`.
-   - Baixa o `installer.exe` para `kaspersky/` caso não exista localmente.
+   - Baixa o instalador para `kaspersky/installer.exe` (renomeado automaticamente) caso não exista localmente.
    - Executa o **cleaner** (quando necessário) e a instalação do Kaspersky.
    - Configura servidor de gerenciamento e NTP.
    - Registra todas as ações em `log/`.
