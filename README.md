@@ -54,9 +54,9 @@ Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
 ## ▶️ Modo de uso
 
 ``` bash
-git clone https://github.com/SEU_USUARIO/kaspersky-installer.git
+git clone https://github.com/ArthurCorreaC/Kaspersky-full-install.git
 cd kaspersky-installer/antivirus
-instalar_admin.bat
+instalar_admin.bat # executar como Administrador
 ```
 
 ------------------------------------------------------------------------
@@ -102,13 +102,6 @@ O cleaner pode não ter sido acionado --- a lógica pode ser ajustada.
 
 ------------------------------------------------------------------------
 
-## 🤝 Contribuindo
-
-Contribuições são bem-vindas!\
-Fork → Branch → Pull Request.
-
-------------------------------------------------------------------------
-
 ## 📜 Licença
 
 Indique sua licença (MIT, GPLv3, etc.)
@@ -117,4 +110,4 @@ Indique sua licença (MIT, GPLv3, etc.)
 
 ## 👨‍💻 Autor
 
-Mantenedor: **Arthur Henrique Corrêa Costa**
+Mantenedor: **2º Ten - Arthur Henrique Correa Costa [EsPCEx]**
