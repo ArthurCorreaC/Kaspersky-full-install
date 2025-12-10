@@ -25,6 +25,7 @@ INSTALLER_URL=https://dados.3cta.eb.mil.br/s/cyJnnqEMn8pa3NP/download?path=%2FWi
 MANAGEMENT_SERVER=ksc3cta02.3cta.eb.mil.br                                             # Servidor Kaspersky Security Center
 NTP_SERVER=ntp.3cta.eb.mil.br                                                          # Servidor NTP
 LOG_DIRECTORY=log                                                                      # Pasta para armazenar logs
+AUTO_PATCH_STEP4=S                                                                     # Padrão "S" para aplicar o patch da Etapa 4 automaticamente ("1"/"true"/"yes"/"sim" também funcionam)
 ```
 
 ---
@@ -65,6 +66,8 @@ instalar_admin.bat  # Executar como Administrador
 ## 📝 Logs
 - Gerados automaticamente em `log/` com timestamp no nome do arquivo.
 - Incluem mensagens de status e erros capturados durante a execução, além de um transcript completo do console.
+
+> 💡 Certificados HTTPS internos: o script ignora certificados inválidos ao baixar o instalador, para evitar falhas em redes internas. Os downloads continuam registrados em log.
 
 ---
 

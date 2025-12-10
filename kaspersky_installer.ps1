@@ -33,6 +33,7 @@ $InstallerUrl    = if ($Config['INSTALLER_URL']) { $Config['INSTALLER_URL'] } el
 $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERVER'] } else { 'ksc3cta02.3cta.eb.mil.br' }
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
+$AutoPatchStep4   = if ($Config['AUTO_PATCH_STEP4']) { $Config['AUTO_PATCH_STEP4'] } else { 'S' }
 
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
@@ -46,6 +47,25 @@ Start-Transcript -Path $TranscriptFile -Append | Out-Null
 $KlmoverPath = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\WOW6432Node\KasperskyLab\Components\27\1103\1.0.0.0\Installer" -Name "KLMOVE_EXE" -ErrorAction SilentlyContinue
 if (-not $KlmoverPath) {
     $KlmoverPath = "C:\Program Files (x86)\Kaspersky Lab\NetworkAgent\klmover.exe"
+}
+
+# =================================================================================
+# CONFIGURAÇÕES DE REDE
+# =================================================================================
+
+function Initialize-TlsConfiguration {
+    # Garante suporte a TLS mais modernos e ignora certificados não confiáveis da rede interna
+    $currentProtocols = [System.Net.ServicePointManager]::SecurityProtocol
+    $desiredProtocols = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+    if (($currentProtocols -band $desiredProtocols) -ne $desiredProtocols) {
+        [System.Net.ServicePointManager]::SecurityProtocol = $currentProtocols -bor $desiredProtocols
+    }
+
+    if (-not $script:CertificateCallbackSet) {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        $script:CertificateCallbackSet = $true
+        Write-Status -Type Warning -Message "Certificados SSL inseguros serão ignorados para downloads internos."
+    }
 }
 
 # =================================================================================
@@ -132,6 +152,8 @@ function Show-Banner {
 
 function Test-Prerequisites {
     Write-Status -Type Step -Message "ETAPA 1: Verificando arquivos e pré-requisitos"
+
+    Initialize-TlsConfiguration
 
     if (-NOT (Test-Path -Path $InstallerPath)) {
         if (-not $InstallerUrl) {
@@ -223,15 +245,24 @@ function Configure-NetworkAgent {
 
 function Apply-OptionalPatches {
     Write-Status -Type Step -Message "ETAPA 4: Patch de Correção (Opcional)"
-    
-    $title = "Patch de Correção"
-    $message = "Deseja executar o patch de correção para problemas de sincronização?"
-    $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Sim", "Aplica os patches de correção."
-    $no = New-Object System.Management.Automation.Host.ChoiceDescription "&Não", "Ignora a aplicação dos patches."
-    $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-    $result = $host.UI.PromptForChoice($title, $message, $options, 1)
 
-    if ($result -eq 0) {
+    $shouldAutoApply = $AutoPatchStep4 -and ($AutoPatchStep4.ToString().ToLower() -in @('1','true','yes','y','sim','s'))
+    $userConsent = $false
+
+    if ($shouldAutoApply) {
+        Write-Status -Type Info -Message "Variável AUTO_PATCH_STEP4 ativa. Aplicando patch automaticamente."
+        $userConsent = $true
+    } else {
+        $title = "Patch de Correção"
+        $message = "Deseja executar o patch de correção para problemas de sincronização?"
+        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Sim", "Aplica os patches de correção."
+        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&Não", "Ignora a aplicação dos patches."
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+        $result = $host.UI.PromptForChoice($title, $message, $options, 1)
+        $userConsent = ($result -eq 0)
+    }
+
+    if ($userConsent) {
         if (-NOT (Test-Path -Path $CleanerPath)) {
             Write-Status -Type Error -Message "Arquivo '$CleanerPath' não encontrado. Etapa ignorada."
             return
