@@ -33,6 +33,7 @@ $InstallerUrl    = if ($Config['INSTALLER_URL']) { $Config['INSTALLER_URL'] } el
 $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERVER'] } else { 'ksc3cta02.3cta.eb.mil.br' }
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
+$AutoPatchStep4   = if ($Config['AUTO_PATCH_STEP4']) { $Config['AUTO_PATCH_STEP4'] } else { '' }
 
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
@@ -244,15 +245,24 @@ function Configure-NetworkAgent {
 
 function Apply-OptionalPatches {
     Write-Status -Type Step -Message "ETAPA 4: Patch de Correção (Opcional)"
-    
-    $title = "Patch de Correção"
-    $message = "Deseja executar o patch de correção para problemas de sincronização?"
-    $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Sim", "Aplica os patches de correção."
-    $no = New-Object System.Management.Automation.Host.ChoiceDescription "&Não", "Ignora a aplicação dos patches."
-    $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-    $result = $host.UI.PromptForChoice($title, $message, $options, 1)
 
-    if ($result -eq 0) {
+    $shouldAutoApply = $AutoPatchStep4 -and ($AutoPatchStep4.ToString().ToLower() -in @('1','true','yes','y','sim'))
+    $userConsent = $false
+
+    if ($shouldAutoApply) {
+        Write-Status -Type Info -Message "Variável AUTO_PATCH_STEP4 ativa. Aplicando patch automaticamente."
+        $userConsent = $true
+    } else {
+        $title = "Patch de Correção"
+        $message = "Deseja executar o patch de correção para problemas de sincronização?"
+        $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Sim", "Aplica os patches de correção."
+        $no = New-Object System.Management.Automation.Host.ChoiceDescription "&Não", "Ignora a aplicação dos patches."
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
+        $result = $host.UI.PromptForChoice($title, $message, $options, 1)
+        $userConsent = ($result -eq 0)
+    }
+
+    if ($userConsent) {
         if (-NOT (Test-Path -Path $CleanerPath)) {
             Write-Status -Type Error -Message "Arquivo '$CleanerPath' não encontrado. Etapa ignorada."
             return
