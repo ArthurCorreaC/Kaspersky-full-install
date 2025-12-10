@@ -49,6 +49,25 @@ if (-not $KlmoverPath) {
 }
 
 # =================================================================================
+# CONFIGURAÇÕES DE REDE
+# =================================================================================
+
+function Initialize-TlsConfiguration {
+    # Garante suporte a TLS mais modernos e ignora certificados não confiáveis da rede interna
+    $currentProtocols = [System.Net.ServicePointManager]::SecurityProtocol
+    $desiredProtocols = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11 -bor [System.Net.SecurityProtocolType]::Tls
+    if (($currentProtocols -band $desiredProtocols) -ne $desiredProtocols) {
+        [System.Net.ServicePointManager]::SecurityProtocol = $currentProtocols -bor $desiredProtocols
+    }
+
+    if (-not $script:CertificateCallbackSet) {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        $script:CertificateCallbackSet = $true
+        Write-Status -Type Warning -Message "Certificados SSL inseguros serão ignorados para downloads internos."
+    }
+}
+
+# =================================================================================
 # FUNÇÕES AUXILIARES
 # =================================================================================
 
@@ -132,6 +151,8 @@ function Show-Banner {
 
 function Test-Prerequisites {
     Write-Status -Type Step -Message "ETAPA 1: Verificando arquivos e pré-requisitos"
+
+    Initialize-TlsConfiguration
 
     if (-NOT (Test-Path -Path $InstallerPath)) {
         if (-not $InstallerUrl) {

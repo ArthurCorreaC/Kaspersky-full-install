@@ -66,6 +66,8 @@ instalar_admin.bat  # Executar como Administrador
 - Gerados automaticamente em `log/` com timestamp no nome do arquivo.
 - Incluem mensagens de status e erros capturados durante a execução, além de um transcript completo do console.
 
+> 💡 Certificados HTTPS internos: o script ignora certificados inválidos ao baixar o instalador, para evitar falhas em redes internas. Os downloads continuam registrados em log.
+
 ---
 
 ## 🆘 Troubleshooting
