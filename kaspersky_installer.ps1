@@ -33,7 +33,7 @@ $InstallerUrl    = if ($Config['INSTALLER_URL']) { $Config['INSTALLER_URL'] } el
 $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERVER'] } else { 'ksc3cta02.3cta.eb.mil.br' }
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
-$AutoPatchStep4   = if ($Config['AUTO_PATCH_STEP4']) { $Config['AUTO_PATCH_STEP4'] } else { '' }
+$AutoPatchStep4   = if ($Config['AUTO_PATCH_STEP4']) { $Config['AUTO_PATCH_STEP4'] } else { 'S' }
 
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
@@ -246,7 +246,7 @@ function Configure-NetworkAgent {
 function Apply-OptionalPatches {
     Write-Status -Type Step -Message "ETAPA 4: Patch de Correção (Opcional)"
 
-    $shouldAutoApply = $AutoPatchStep4 -and ($AutoPatchStep4.ToString().ToLower() -in @('1','true','yes','y','sim'))
+    $shouldAutoApply = $AutoPatchStep4 -and ($AutoPatchStep4.ToString().ToLower() -in @('1','true','yes','y','sim','s'))
     $userConsent = $false
 
     if ($shouldAutoApply) {
