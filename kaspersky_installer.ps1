@@ -34,6 +34,8 @@ $ManagementServer = if ($Config['MANAGEMENT_SERVER']) { $Config['MANAGEMENT_SERV
 $NtpServer        = if ($Config['NTP_SERVER']) { $Config['NTP_SERVER'] } else { 'ntp.3cta.eb.mil.br' }
 $LogDirectory     = if ($Config['LOG_DIRECTORY']) { Join-Path $PSScriptRoot $Config['LOG_DIRECTORY'] } else { Join-Path $PSScriptRoot 'log' }
 $AutoPatchStep4   = if ($Config['AUTO_PATCH_STEP4']) { $Config['AUTO_PATCH_STEP4'] } else { 'S' }
+$SilentInstall    = if ($Config['SILENT_INSTALL']) { $Config['SILENT_INSTALL'] } else { '1' }
+$InstallerParameters = if ($Config['INSTALLER_PARAMETERS']) { $Config['INSTALLER_PARAMETERS'] } else { '/pEULA=1 /pPRIVACYPOLICY=1 /pKSN=0 /pALLOWREBOOT=1 /s /qn' }
 
 if (-not (Test-Path $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
@@ -213,14 +215,26 @@ function Test-Prerequisites {
 
 function Start-AntivirusInstallation {
     Write-Status -Type Step -Message "ETAPA 2: Instalação do Kaspersky Antivirus"
-    Write-Status -Type Action -Message "Aguardando instalação manual. A janela do instalador será aberta."
-    Write-Status -Type Action -Message "Por favor, conclua a instalação e feche o instalador para continuar."
-    
-    try {
-        Start-Process -FilePath $InstallerPath -Wait -ErrorAction Stop
-        Write-Status -Type Success -Message "Instalador do antivírus foi fechado."
-    } catch {
-        throw "O processo de instalação falhou, foi cancelado ou não pôde ser iniciado."
+    $shouldRunSilently = $SilentInstall -and ($SilentInstall.ToString().ToLower() -in @('1','true','yes','y','sim','s'))
+
+    if ($shouldRunSilently) {
+        Write-Status -Type Action -Message "Instalação silenciosa solicitada (SILENT_INSTALL ativado). Executando instalador automaticamente..."
+        try {
+            Start-Process -FilePath $InstallerPath -ArgumentList $InstallerParameters -Wait -ErrorAction Stop
+            Write-Status -Type Success -Message "Instalação silenciosa concluída ou instalador encerrado."
+        } catch {
+            throw "Falha ao executar a instalação silenciosa: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Status -Type Action -Message "Aguardando instalação manual. A janela do instalador será aberta."
+        Write-Status -Type Action -Message "Por favor, conclua a instalação e feche o instalador para continuar."
+        
+        try {
+            Start-Process -FilePath $InstallerPath -Wait -ErrorAction Stop
+            Write-Status -Type Success -Message "Instalador do antivírus foi fechado."
+        } catch {
+            throw "O processo de instalação falhou, foi cancelado ou não pôde ser iniciado."
+        }
     }
 }
 
