@@ -169,25 +169,30 @@ function Wait-ForInstallerLogCompletion {
         return $false
     }
 
-    while (-not $logFile -and (Get-Date) -lt $deadline) {
-        foreach ($tempDir in $tempLocations) {
-            if ([string]::IsNullOrWhiteSpace($tempDir)) {
-                continue
+    try {
+        while (-not $logFile -and (Get-Date) -lt $deadline) {
+            foreach ($tempDir in $tempLocations) {
+                if ([string]::IsNullOrWhiteSpace($tempDir)) {
+                    continue
+                }
+
+                $logFile = Get-ChildItem -LiteralPath $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
+                    Where-Object { $_.LastWriteTime -ge $StartTime } |
+                    Sort-Object LastWriteTime -Descending |
+                    Select-Object -First 1
+
+                if ($logFile) {
+                    break
+                }
             }
 
-            $logFile = Get-ChildItem -LiteralPath $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
-                Where-Object { $_.LastWriteTime -ge $StartTime } |
-                Sort-Object LastWriteTime -Descending |
-                Select-Object -First 1
-
-            if ($logFile) {
-                break
+            if (-not $logFile) {
+                Start-Sleep -Seconds 2
             }
         }
-
-        if (-not $logFile) {
-            Start-Sleep -Seconds 2
-        }
+    } catch {
+        Write-Status -Type Warning -Message "Falha ao buscar log do instalador: $($_.Exception.Message)"
+        return $false
     }
 
     if (-not $logFile -or [string]::IsNullOrWhiteSpace($logFile.FullName)) {
@@ -204,24 +209,29 @@ function Wait-ForInstallerLogCompletion {
     )
     $failurePattern = "Status de erro ou êxito da instalação:\s*[1-9]\d*"
 
-    while ((Get-Date) -lt $deadline) {
-        if ([string]::IsNullOrWhiteSpace($logFile.FullName)) {
-            Write-Status -Type Warning -Message "O caminho do log de instalação é inválido. Interrompendo monitoramento."
-            return $false
+    try {
+        while ((Get-Date) -lt $deadline) {
+            if ([string]::IsNullOrWhiteSpace($logFile.FullName)) {
+                Write-Status -Type Warning -Message "O caminho do log de instalação é inválido. Interrompendo monitoramento."
+                return $false
+            }
+
+            $tailContent = Get-Content -LiteralPath $logFile.FullName -Tail 200 -ErrorAction SilentlyContinue
+            $tailText = $tailContent -join "`n"
+
+            if ($successPatterns | Where-Object { $tailText -match $_ }) {
+                return $true
+            }
+
+            if ($tailText -match $failurePattern) {
+                throw "O log de instalação indica falha (código diferente de 0)."
+            }
+
+            Start-Sleep -Seconds 5
         }
-
-        $tailContent = Get-Content -LiteralPath $logFile.FullName -Tail 200 -ErrorAction SilentlyContinue
-        $tailText = $tailContent -join "`n"
-
-        if ($successPatterns | Where-Object { $tailText -match $_ }) {
-            return $true
-        }
-
-        if ($tailText -match $failurePattern) {
-            throw "O log de instalação indica falha (código diferente de 0)."
-        }
-
-        Start-Sleep -Seconds 5
+    } catch {
+        Write-Status -Type Warning -Message "Falha ao monitorar o log de instalação: $($_.Exception.Message)"
+        return $false
     }
 
     Write-Status -Type Warning -Message "Tempo limite excedido aguardando conclusão da instalação no log."
@@ -314,7 +324,12 @@ function Start-AntivirusInstallation {
         $installerArgs = "/s"
         $installStartTime = Get-Date
         $installerProcess = Start-Process -FilePath $InstallerPath -ArgumentList $installerArgs -PassThru -ErrorAction Stop
-        $logCompleted = Wait-ForInstallerLogCompletion -StartTime $installStartTime
+        try {
+            $logCompleted = Wait-ForInstallerLogCompletion -StartTime $installStartTime
+        } catch {
+            Write-Status -Type Warning -Message "Erro ao validar o log de instalação: $($_.Exception.Message)"
+            $logCompleted = $false
+        }
         if (-not $logCompleted) {
             Write-Status -Type Warning -Message "Log não encontrado ou inconclusivo. Aguardando término do instalador como fallback..."
             $processWaitSeconds = 60 * 60
