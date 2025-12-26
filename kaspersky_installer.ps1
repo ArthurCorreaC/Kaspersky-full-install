@@ -143,12 +143,22 @@ function Wait-ForInstallerLogCompletion {
     $logPattern = "kl-install-*.log"
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     $logFile = $null
-    $tempLocations = @(
-        (Join-Path $env:LOCALAPPDATA "Temp"),
-        $env:TEMP,
-        $env:TMP,
-        (Join-Path $env:WINDIR "Temp")
-    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+    $tempLocations = @()
+
+    if ($env:LOCALAPPDATA) {
+        $tempLocations += Join-Path $env:LOCALAPPDATA "Temp"
+    }
+    if ($env:TEMP) {
+        $tempLocations += $env:TEMP
+    }
+    if ($env:TMP) {
+        $tempLocations += $env:TMP
+    }
+    if ($env:WINDIR) {
+        $tempLocations += Join-Path $env:WINDIR "Temp"
+    }
+
+    $tempLocations = $tempLocations | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
     Write-Status -Type Info -Message "Aguardando criação do log de instalação (kl-install-*.log) nos diretórios temporários..."
 
