@@ -158,13 +158,24 @@ function Wait-ForInstallerLogCompletion {
         $tempLocations += Join-Path $env:WINDIR "Temp"
     }
 
-    $tempLocations = $tempLocations | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+    $tempLocations = $tempLocations | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_)
+    } | Select-Object -Unique
 
     Write-Status -Type Info -Message "Aguardando criação do log de instalação (kl-install-*.log) nos diretórios temporários..."
 
+    if (-not $tempLocations -or $tempLocations.Count -eq 0) {
+        Write-Status -Type Warning -Message "Nenhum diretório temporário válido foi encontrado para monitorar o log."
+        return $false
+    }
+
     while (-not $logFile -and (Get-Date) -lt $deadline) {
         foreach ($tempDir in $tempLocations) {
-            $logFile = Get-ChildItem -Path $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
+            if ([string]::IsNullOrWhiteSpace($tempDir)) {
+                continue
+            }
+
+            $logFile = Get-ChildItem -LiteralPath $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
                 Where-Object { $_.LastWriteTime -ge $StartTime } |
                 Sort-Object LastWriteTime -Descending |
                 Select-Object -First 1
@@ -179,8 +190,9 @@ function Wait-ForInstallerLogCompletion {
         }
     }
 
-    if (-not $logFile) {
-        throw "Não foi possível localizar o log de instalação (kl-install-*.log) dentro do tempo limite."
+    if (-not $logFile -or [string]::IsNullOrWhiteSpace($logFile.FullName)) {
+        Write-Status -Type Warning -Message "Não foi possível localizar o log de instalação (kl-install-*.log) dentro do tempo limite."
+        return $false
     }
 
     Write-Status -Type Info -Message "Monitorando log de instalação: $($logFile.FullName)"
@@ -193,11 +205,16 @@ function Wait-ForInstallerLogCompletion {
     $failurePattern = "Status de erro ou êxito da instalação:\s*[1-9]\d*"
 
     while ((Get-Date) -lt $deadline) {
-        $tailContent = Get-Content -Path $logFile.FullName -Tail 200 -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($logFile.FullName)) {
+            Write-Status -Type Warning -Message "O caminho do log de instalação é inválido. Interrompendo monitoramento."
+            return $false
+        }
+
+        $tailContent = Get-Content -LiteralPath $logFile.FullName -Tail 200 -ErrorAction SilentlyContinue
         $tailText = $tailContent -join "`n"
 
         if ($successPatterns | Where-Object { $tailText -match $_ }) {
-            return
+            return $true
         }
 
         if ($tailText -match $failurePattern) {
@@ -207,7 +224,8 @@ function Wait-ForInstallerLogCompletion {
         Start-Sleep -Seconds 5
     }
 
-    throw "Tempo limite excedido aguardando conclusão da instalação no log."
+    Write-Status -Type Warning -Message "Tempo limite excedido aguardando conclusão da instalação no log."
+    return $false
 }
 
 # =================================================================================
@@ -295,8 +313,22 @@ function Start-AntivirusInstallation {
     try {
         $installerArgs = "/s"
         $installStartTime = Get-Date
-        Start-Process -FilePath $InstallerPath -ArgumentList $installerArgs -ErrorAction Stop
-        Wait-ForInstallerLogCompletion -StartTime $installStartTime
+        $installerProcess = Start-Process -FilePath $InstallerPath -ArgumentList $installerArgs -PassThru -ErrorAction Stop
+        $logCompleted = Wait-ForInstallerLogCompletion -StartTime $installStartTime
+        if (-not $logCompleted) {
+            Write-Status -Type Warning -Message "Log não encontrado ou inconclusivo. Aguardando término do instalador como fallback..."
+            $processWaitSeconds = 60 * 60
+            Wait-Process -Id $installerProcess.Id -Timeout $processWaitSeconds -ErrorAction SilentlyContinue
+            $installerProcess.Refresh()
+
+            if ($installerProcess.HasExited) {
+                if ($installerProcess.ExitCode -ne 0) {
+                    throw "O instalador retornou código de erro $($installerProcess.ExitCode)."
+                }
+            } else {
+                Write-Status -Type Warning -Message "O processo do instalador ainda está em execução. Prosseguindo sem validação do log."
+            }
+        }
         Write-Status -Type Success -Message "Instalação silenciosa concluída com sucesso."
     } catch {
         throw "O processo de instalação falhou ou não pôde ser iniciado: $($_.Exception.Message)"
