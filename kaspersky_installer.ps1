@@ -137,23 +137,32 @@ function Wait-ForInstallerLogCompletion {
     param(
         [Parameter(Mandatory=$true)]
         [datetime]$StartTime,
-        [Parameter(Mandatory=$true)]
-        [System.Diagnostics.Process]$InstallerProcess,
         [int]$TimeoutMinutes = 60
     )
 
-    $tempDir = Join-Path $env:LOCALAPPDATA "Temp"
     $logPattern = "kl-install-*.log"
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     $logFile = $null
+    $tempLocations = @(
+        (Join-Path $env:LOCALAPPDATA "Temp"),
+        $env:TEMP,
+        $env:TMP,
+        (Join-Path $env:WINDIR "Temp")
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 
-    Write-Status -Type Info -Message "Aguardando criação do log de instalação em '$tempDir'..."
+    Write-Status -Type Info -Message "Aguardando criação do log de instalação (kl-install-*.log) nos diretórios temporários..."
 
     while (-not $logFile -and (Get-Date) -lt $deadline) {
-        $logFile = Get-ChildItem -Path $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTime -ge $StartTime } |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
+        foreach ($tempDir in $tempLocations) {
+            $logFile = Get-ChildItem -Path $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
+                Where-Object { $_.LastWriteTime -ge $StartTime } |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 1
+
+            if ($logFile) {
+                break
+            }
+        }
 
         if (-not $logFile) {
             Start-Sleep -Seconds 2
@@ -183,10 +192,6 @@ function Wait-ForInstallerLogCompletion {
 
         if ($tailText -match $failurePattern) {
             throw "O log de instalação indica falha (código diferente de 0)."
-        }
-
-        if ($InstallerProcess.HasExited -and -not $tailText) {
-            throw "O processo do instalador finalizou sem gerar entradas no log."
         }
 
         Start-Sleep -Seconds 5
@@ -280,11 +285,11 @@ function Start-AntivirusInstallation {
     try {
         $installerArgs = "/s"
         $installStartTime = Get-Date
-        $installerProcess = Start-Process -FilePath $InstallerPath -ArgumentList $installerArgs -PassThru -ErrorAction Stop
-        Wait-ForInstallerLogCompletion -StartTime $installStartTime -InstallerProcess $installerProcess
+        Start-Process -FilePath $InstallerPath -ArgumentList $installerArgs -ErrorAction Stop
+        Wait-ForInstallerLogCompletion -StartTime $installStartTime
         Write-Status -Type Success -Message "Instalação silenciosa concluída com sucesso."
     } catch {
-        throw "O processo de instalação falhou, foi cancelado ou não pôde ser iniciado."
+        throw "O processo de instalação falhou ou não pôde ser iniciado: $($_.Exception.Message)"
     }
 }
 
