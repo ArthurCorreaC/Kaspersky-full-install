@@ -143,34 +143,33 @@ function Wait-ForInstallerLogCompletion {
     $logPattern = "kl-install-*.log"
     $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
     $logFile = $null
-    $tempLocations = @()
 
-    if ($env:LOCALAPPDATA) {
-        $tempLocations += Join-Path $env:LOCALAPPDATA "Temp"
-    }
-    if ($env:TEMP) {
-        $tempLocations += $env:TEMP
-    }
-    if ($env:TMP) {
-        $tempLocations += $env:TMP
-    }
-    if ($env:WINDIR) {
-        $tempLocations += Join-Path $env:WINDIR "Temp"
-    }
+    function Get-TempLocations {
+        $locations = @()
 
-    $tempLocations = $tempLocations | Where-Object {
-        -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_)
-    } | Select-Object -Unique
+        if ($env:LOCALAPPDATA) {
+            $locations += Join-Path $env:LOCALAPPDATA "Temp"
+        }
+        if ($env:TEMP) {
+            $locations += $env:TEMP
+        }
+        if ($env:TMP) {
+            $locations += $env:TMP
+        }
+        if ($env:WINDIR) {
+            $locations += Join-Path $env:WINDIR "Temp"
+        }
+
+        $locations | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_)
+        } | Select-Object -Unique
+    }
 
     Write-Status -Type Info -Message "Aguardando criação do log de instalação (kl-install-*.log) nos diretórios temporários..."
 
-    if (-not $tempLocations -or $tempLocations.Count -eq 0) {
-        Write-Status -Type Warning -Message "Nenhum diretório temporário válido foi encontrado para monitorar o log."
-        return $false
-    }
-
     try {
         while (-not $logFile -and (Get-Date) -lt $deadline) {
+            $tempLocations = Get-TempLocations
             foreach ($tempDir in $tempLocations) {
                 if ([string]::IsNullOrWhiteSpace($tempDir)) {
                     continue
