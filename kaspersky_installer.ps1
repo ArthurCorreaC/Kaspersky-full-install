@@ -133,6 +133,68 @@ function Invoke-CommandWithStatus {
     }
 }
 
+function Wait-ForInstallerLogCompletion {
+    param(
+        [Parameter(Mandatory=$true)]
+        [datetime]$StartTime,
+        [Parameter(Mandatory=$true)]
+        [System.Diagnostics.Process]$InstallerProcess,
+        [int]$TimeoutMinutes = 60
+    )
+
+    $tempDir = Join-Path $env:LOCALAPPDATA "Temp"
+    $logPattern = "kl-install-*.log"
+    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    $logFile = $null
+
+    Write-Status -Type Info -Message "Aguardando criação do log de instalação em '$tempDir'..."
+
+    while (-not $logFile -and (Get-Date) -lt $deadline) {
+        $logFile = Get-ChildItem -Path $tempDir -Filter $logPattern -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $StartTime } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+        if (-not $logFile) {
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    if (-not $logFile) {
+        throw "Não foi possível localizar o log de instalação (kl-install-*.log) dentro do tempo limite."
+    }
+
+    Write-Status -Type Info -Message "Monitorando log de instalação: $($logFile.FullName)"
+
+    $successPatterns = @(
+        "Installation completed successfully",
+        "Status de erro ou êxito da instalação:\s*0",
+        "MainEngineThread is returning 0"
+    )
+    $failurePattern = "Status de erro ou êxito da instalação:\s*[1-9]\d*"
+
+    while ((Get-Date) -lt $deadline) {
+        $tailContent = Get-Content -Path $logFile.FullName -Tail 200 -ErrorAction SilentlyContinue
+        $tailText = $tailContent -join "`n"
+
+        if ($successPatterns | Where-Object { $tailText -match $_ }) {
+            return
+        }
+
+        if ($tailText -match $failurePattern) {
+            throw "O log de instalação indica falha (código diferente de 0)."
+        }
+
+        if ($InstallerProcess.HasExited -and -not $tailText) {
+            throw "O processo do instalador finalizou sem gerar entradas no log."
+        }
+
+        Start-Sleep -Seconds 5
+    }
+
+    throw "Tempo limite excedido aguardando conclusão da instalação no log."
+}
+
 # =================================================================================
 # FUNÇÕES PRINCIPAIS DO SCRIPT
 # =================================================================================
@@ -213,12 +275,14 @@ function Test-Prerequisites {
 
 function Start-AntivirusInstallation {
     Write-Status -Type Step -Message "ETAPA 2: Instalação do Kaspersky Antivirus"
-    Write-Status -Type Action -Message "Aguardando instalação manual. A janela do instalador será aberta."
-    Write-Status -Type Action -Message "Por favor, conclua a instalação e feche o instalador para continuar."
-    
+    Write-Status -Type Action -Message "Iniciando instalação silenciosa do Kaspersky Antivirus."
+
     try {
-        Start-Process -FilePath $InstallerPath -Wait -ErrorAction Stop
-        Write-Status -Type Success -Message "Instalador do antivírus foi fechado."
+        $installerArgs = "/s"
+        $installStartTime = Get-Date
+        $installerProcess = Start-Process -FilePath $InstallerPath -ArgumentList $installerArgs -PassThru -ErrorAction Stop
+        Wait-ForInstallerLogCompletion -StartTime $installStartTime -InstallerProcess $installerProcess
+        Write-Status -Type Success -Message "Instalação silenciosa concluída com sucesso."
     } catch {
         throw "O processo de instalação falhou, foi cancelado ou não pôde ser iniciado."
     }
